@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>X Timeline Filter</title>
+    <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+    <h2>X Timeline Filter Settings</h2>
+    <div id="message"></div>
+    <div id="apiKeySection">
+        <label for="apiKey">GROQ API Key:</label>
+        <input type="password" id="apiKey" placeholder="Enter your GROQ API key">
+        <button id="saveApiKey">Save API Key</button>
+    </div>
+    <div id="topics">
+        <h3>Exclude posts containing</h3>
+        <input type="text" id="topicsInput" placeholder="Enter topics separated by commas (e.g., politics, negativity, noise, clickbait)">
+    </div>
+    <button id="save">Save Settings</button>
+    <script src="popup.js"></script>
+</body>
+</html>

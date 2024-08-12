@@ -6,10 +6,10 @@
   "permissions": [
     "storage"
   ],
-  "host_permissions": [
-    "https://x.com/*",
-    "https://api.groq.com/*"
-  ],
+  "host_permissions": ["https://x.com/*"],
+  "action": {
+    "default_popup": "popup.html"
+  },
   "content_scripts": [
     {
       "matches": ["https://x.com/*"],
