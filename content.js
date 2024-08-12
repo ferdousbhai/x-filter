@@ -3,7 +3,7 @@ const API_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 const MODEL_NAME = 'llama-3.1-8b-instant';
 
 // Helper functions
-const getStorageData = () => chrome.storage.sync.get(['topics', 'GROQ_API_KEY']);
+const getStorageData = async () => chrome.storage.sync.get(['topics', 'GROQ_API_KEY']);
 
 const getCachedAnalysis = postId => chrome.storage.local.get(postId)
     .then(result => result[postId] ?? null);
@@ -26,7 +26,8 @@ const checkForNewPosts = async () => {
     }
 
     const posts = document.querySelectorAll('[data-testid="cellInnerDiv"]');
-    await Promise.all(Array.from(posts).map(async post => {
+    const newPosts = Array.from(posts).filter(post => !post.dataset.analyzed);
+    await Promise.all(newPosts.map(async post => {
         const tweetArticle = post.querySelector('article[data-testid="tweet"]');
         if (!tweetArticle) return;
 
@@ -35,11 +36,18 @@ const checkForNewPosts = async () => {
 
         if (!postId) return;
 
-        const analysis = await getCachedAnalysis(postId) || await analyzeTweet(postText, GROQ_API_KEY);
+        const cachedAnalysis = await getCachedAnalysis(postId);
+        if (cachedAnalysis) {
+            applyPostVisibility(postId, cachedAnalysis, topics);
+            return;
+        }
+
+        const analysis = await analyzeTweet(postText);
         if (analysis) {
             await cacheAnalysis(postId, analysis);
             applyPostVisibility(postId, analysis, topics);
         }
+        post.dataset.analyzed = true;
     }));
 };
 
@@ -48,17 +56,16 @@ const checkForNewPosts = async () => {
 const applyPostVisibility = (postId, analysis, topics) => {
     if (!analysis || typeof analysis !== 'object') return;
 
-    const shouldHide = topics.some(topic => analysis[topic]);
-    if (!shouldHide) return;
+    const matchingTopics = topics.filter(topic => analysis[topic]);
+    if (matchingTopics.length === 0) return;
 
     const postElement = findPostElement(postId);
     if (!postElement || postElement.style.display === 'none') return;
 
     postElement.style.display = 'none';
+
     const tweetUrl = `https://x.com/user/status/${postId}`;
     const tweetText = postElement.querySelector('[data-testid="tweetText"]')?.innerText.trim() ?? 'Text not found';
-    
-    const matchingTopics = topics.filter(topic => analysis[topic]).join(', ');
     
     console.log(`Post ${postId} hidden due to matching topics: ${matchingTopics}\nTweet URL: ${tweetUrl}\nTweet Text: ${tweetText}`);
 };
@@ -69,9 +76,13 @@ const findPostElement = postId => {
     return Array.from(cellInnerDivs).find(div => div.querySelector(`a[href*="/status/${postId}"]`)) || null;
 };
 
-// Function to analyze a tweet using LLM
-const analyzeTweet = async (tweetText, apiKey) => {
-    const { topics } = await getStorageData();
+const analyzeTweet = async (tweetText) => {
+    const { topics, GROQ_API_KEY } = await getStorageData();
+    if (!GROQ_API_KEY) {
+        console.error('GROQ API key is missing. Please set it in the extension options.');
+        return {};
+    }
+
     const messages = [
         {
             role: "system",
@@ -86,7 +97,7 @@ const analyzeTweet = async (tweetText, apiKey) => {
                 method: "POST",
                 headers: {
                     "Content-Type": "application/json",
-                    "Authorization": `Bearer ${apiKey}`
+                    "Authorization": `Bearer ${GROQ_API_KEY}`
                 },
                 body: JSON.stringify({
                     messages,
@@ -106,12 +117,12 @@ const analyzeTweet = async (tweetText, apiKey) => {
             const result = JSON.parse(data.choices[0].message.content);
             return result;
         } catch (error) {
+            console.error(`Error analyzing tweet (attempt ${retries + 1}/3):`, error);
             if (retries === 2) return {};
         }
     }
     return {};
 };
-
 
 // Debounce function to limit how often the scroll event fires
 const debounce = (func, delay) => {
@@ -131,7 +142,8 @@ if (window.location.hostname === 'x.com') {
 }
 
 // Debug mode
-if (true) {
+const DEBUG_MODE = true;
+if (DEBUG_MODE) {
     Object.assign(window, {
         findPostElement, resetCache, analyzeTweet, checkForNewPosts, getStorageData,
         getCachedAnalysis, cacheAnalysis, applyPostVisibility

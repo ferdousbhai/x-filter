@@ -6,7 +6,7 @@
   "permissions": [
     "storage"
   ],
-  "host_permissions": ["https://x.com/*"],
+  "host_permissions": ["https://x.com/*", "https://api.groq.com/*"],
   "action": {
     "default_popup": "popup.html"
   },
