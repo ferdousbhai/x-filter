@@ -1,41 +1,47 @@
 const defaultTopics = ["politics", "negativity", "noise", "clickbait"];
 
-function loadSettings() {
-    chrome.storage.sync.get(['topics', 'GROQ_API_KEY'], ({ topics = defaultTopics, GROQ_API_KEY = '' }) => {
-        document.getElementById('topicsInput').value = topics.join(', ');
-        document.getElementById('apiKey').value = GROQ_API_KEY;
-    });
-}
+const loadSettings = async () => {
+    const { topics = [], GROQ_API_KEY = '' } = await chrome.storage.sync.get(['topics', 'GROQ_API_KEY']);
+    const currentTopics = topics.length > 0 ? topics : defaultTopics;
 
-function saveSettings() {
+    document.getElementById('topicsInput').value = currentTopics.join(', ');
+    document.getElementById('apiKey').value = GROQ_API_KEY;
+
+    if (topics.length === 0) {
+        await chrome.storage.sync.set({ topics: defaultTopics });
+    }
+};
+
+const showNotification = (message, duration = 3000) => {
+    const notificationElement = document.getElementById('notification');
+    notificationElement.textContent = message;
+    notificationElement.classList.remove('hidden');
+    setTimeout(() => notificationElement.classList.add('hidden'), duration);
+};
+
+const saveSettings = () => {
     const topics = document.getElementById('topicsInput').value.split(',').map(topic => topic.trim()).filter(Boolean);
-    
-    chrome.storage.sync.set({ topics }, () => {
-        showMessage('Settings saved successfully!');
-        chrome.tabs.query({active: true, currentWindow: true}, ([tab]) => {
-            chrome.tabs.sendMessage(tab.id, {action: "reloadSettings"});
-        });
+    chrome.storage.sync.set({ topics: topics.length > 0 ? topics : defaultTopics }, () => {
+        showNotification('Settings saved successfully!');
+        chrome.tabs.query({active: true, currentWindow: true}, ([tab]) => 
+            chrome.tabs.sendMessage(tab.id, {action: "reloadSettings"}));
     });
-}
+};
 
-function saveApiKey() {
+const saveApiKey = async () => {
     const apiKey = document.getElementById('apiKey').value.trim();
     if (apiKey) {
-        chrome.storage.sync.set({ GROQ_API_KEY: apiKey }, () => {
-            showMessage('API Key saved successfully!');
-            // Remove the line that hides apiKeySection
-        });
+        try {
+            await chrome.storage.sync.set({ GROQ_API_KEY: apiKey });
+            showNotification('API Key saved successfully!');
+        } catch (error) {
+            console.error('Error saving API Key:', error);
+            showNotification('Error saving API Key. Please try again.');
+        }
     } else {
-        showMessage('Please enter a valid API Key.');
+        showNotification('Please enter a valid API Key.');
     }
-}
-
-function showMessage(message) {
-    const messageElement = document.getElementById('message');
-    messageElement.textContent = message;
-    messageElement.style.display = 'block';
-    setTimeout(() => messageElement.style.display = 'none', 3000);
-}
+};
 
 document.addEventListener('DOMContentLoaded', () => {
     loadSettings();

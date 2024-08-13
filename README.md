@@ -1,12 +1,11 @@
 # X Filter
 
 ## Overview
-X Filter is a browser extension that analyzes and filters content on X.com using AI-powered topic detection. It leverages the Groq API for content analysis and provides customizable filtering based on user-defined topics.
+X Filter is a browser extension that analyzes and filters content on X.com using AI-powered topic detection.
 
 ## Features
-- Automatic content analysis of X.com posts
 - Customizable topic filtering
-- Cache system for improved performance
+- Automatic content analysis of X.com posts
 
 ## Installation
 1. Clone the repository or download the source code.
