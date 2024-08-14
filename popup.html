@@ -3,14 +3,19 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>X Timeline Filter</title>
+    <title>X Filter</title>
     <link rel="stylesheet" href="popup.css">
 </head>
 <body>
     <h2>X Filter Settings</h2>
     <div id="notification" class="hidden"></div>
     <div id="apiKeySection">
-        <label for="apiKey">GROQ API Key:</label>
+        <label for="apiKey">GROQ API Key 
+            <span class="tooltip">
+                ⓘ
+                <span class="tooltiptext">Get GROQ API Key</span>
+            </span>
+        </label>
         <input type="password" id="apiKey" placeholder="Enter your GROQ API key">
         <button id="saveApiKey">Save API Key</button>
     </div>
@@ -18,7 +23,7 @@
         <h3>Exclude posts containing</h3>
         <input type="text" id="topicsInput" placeholder="Enter topics separated by commas">
     </div>
-    <button id="save">Save Settings</button>
+    <button id="save">Save Filter Topics</button>
     <script src="popup.js"></script>
 </body>
 </html>

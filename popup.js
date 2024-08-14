@@ -47,4 +47,8 @@ document.addEventListener('DOMContentLoaded', () => {
     loadSettings();
     document.getElementById('save').addEventListener('click', saveSettings);
     document.getElementById('saveApiKey').addEventListener('click', saveApiKey);
+
+    document.querySelector('.tooltip').addEventListener('click', () => {
+        window.open('https://console.groq.com/keys', '_blank');
+    });
 });
