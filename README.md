@@ -14,7 +14,7 @@ X Filter is a browser extension that analyzes and filters content on X.com using
 4. Click "Load unpacked" and select the source code directory.
 
 ## Usage
-The extension hides posts on X.com that match user-defined criteria. Use the popup to set Groq API key and list of content types to filter out.
+The extension hides posts on X.com that match user-defined criteria. Use the popup to set Groq API key (free!) and set your list of content types to filter out.
 
 # Acknowledgement
 This project is forked from [ricklamers/x-ai-content-filter-groq](https://github.com/ricklamers/x-ai-content-filter-groq). We appreciate the original work and have built upon it to create this version.
