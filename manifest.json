@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "X Content Filter",
-  "version": "1.0",
-  "description": "Analyzes and filters content on X.com based on configured topics",
+  "version": "1.1",
+  "description": "Filters out content on X.com based on configured topics",
   "permissions": ["storage"],
   "host_permissions": ["https://x.com/*", "https://api.groq.com/*"],
   "action": {

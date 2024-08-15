@@ -7,23 +7,30 @@
     <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-    <h2>X Filter Settings</h2>
-    <div id="notification" class="hidden"></div>
-    <div id="apiKeySection">
-        <label for="apiKey">GROQ API Key 
-            <span class="tooltip">
-                ⓘ
-                <span class="tooltiptext">Get GROQ API Key</span>
-            </span>
-        </label>
-        <input type="password" id="apiKey" placeholder="Enter your GROQ API key">
-        <button id="saveApiKey">Save API Key</button>
-    </div>
-    <div id="topics">
-        <h3>Exclude posts containing</h3>
-        <input type="text" id="topicsInput" placeholder="Enter topics separated by commas">
-    </div>
-    <button id="save">Save Filter Topics</button>
+    <main>
+        <h1>X Filter Settings</h1>
+        
+        <div id="notification" class="hidden"></div>
+
+        <section id="api-key-section">
+            <label for="api-key">
+                GROQ API Key
+                <span class="tooltip" aria-label="Get GROQ API Key">ⓘ</span>
+                <input type="password" id="api-key" placeholder="Enter your GROQ API key" required>
+            </label>
+            <p id="api-key-validation" class="validation-message" aria-live="polite"></p>
+        </section>
+        
+        <section id="topics-section">
+            <label for="topics-input">
+                Exclude posts containing
+                <textarea id="topics-input" placeholder="Enter topics to exclude" rows="2" disabled></textarea>
+            </label>
+            <button id="save-topics" disabled>Update</button>
+            <p id="topics-validation" aria-live="polite"></p>
+        </section>
+    </main>
+    
     <script src="popup.js"></script>
 </body>
 </html>

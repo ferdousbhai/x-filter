@@ -1,63 +1,69 @@
-// Constants
 const API_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
 const MODEL_NAME = 'llama-3.1-8b-instant';
+const DELAY = 500;
 
-// Helper functions
-const getStorageData = () => chrome.storage.sync.get(['topics', 'GROQ_API_KEY']);
-const getCachedAnalysis = postId => chrome.storage.local.get(postId).then(result => result[postId] ?? null);
-const cacheAnalysis = (postId, analysis) => chrome.storage.local.set({ [postId]: analysis });
-const resetCache = async () => {
-    await chrome.storage.local.clear();
-    console.log('Cache (analysis results) has been reset.');
-};
-const truncateTweet = (text, maxLength = 280) => {
-    if (text.length <= maxLength) return text;
-    return text.slice(0, maxLength - 3) + '...';
+const getSettings = async () => {
+    const { topics = [], GROQ_API_KEY = '' } = await chrome.storage.sync.get(['topics', 'GROQ_API_KEY']);
+    return { topics, GROQ_API_KEY };
 };
 
-// Main function
+const getCachedAnalyses = async (postIds) => {
+    const results = await chrome.storage.local.get(postIds);
+    return postIds.map(id => results[id] || null);
+};
+
+const truncateText = (text, maxLength = 280) => 
+    text.length <= maxLength ? text : text.slice(0, maxLength - 3) + '...';
+
+const delay = ms => new Promise(resolve => setTimeout(resolve, ms));
+
 const checkForNewPosts = async () => {
-    const { topics = [], GROQ_API_KEY } = await getStorageData();
+    console.log("Checking for new posts");
+    const { topics, GROQ_API_KEY } = await getSettings();
     if (!GROQ_API_KEY || topics.length === 0) {
         console.error("Missing API key or topics. Aborting analysis.");
-        console.log('API Key:', GROQ_API_KEY ? 'Present' : 'Missing');
-        console.log('Topics:', topics);
         return;
     }
 
-    const posts = document.querySelectorAll('[data-testid="cellInnerDiv"]');
-    const newPosts = Array.from(posts).filter(post => !post.dataset.analyzed);
+    const posts = document.querySelectorAll('[data-testid="cellInnerDiv"]:not([data-analyzed])');
     const tweetsToAnalyze = [];
+    const postIds = [];
 
-    for (const post of newPosts) {
+    posts.forEach(post => {
         const tweetArticle = post.querySelector('article[data-testid="tweet"]');
-        if (!tweetArticle) continue;
+        if (!tweetArticle) return;
 
         const postId = tweetArticle.querySelector('a[href*="/status/"]')?.href.split('/status/')[1];
-        const postText = tweetArticle.querySelector('[data-testid="tweetText"]')?.innerText.trim() ?? '';
-        if (!postId) continue;
+        if (!postId) return;
 
-        const cachedAnalysis = await getCachedAnalysis(postId);
-        if (cachedAnalysis) {
-            applyPostVisibility(postId, cachedAnalysis, topics);
-        } else {
-            tweetsToAnalyze.push({ id: postId, text: truncateTweet(postText) });
-        }
-        post.dataset.analyzed = true;
-    }
+        postIds.push(postId);
+        const postText = tweetArticle.querySelector('[data-testid="tweetText"]')?.innerText.trim() || '';
+        tweetsToAnalyze.push({ id: postId, text: truncateText(postText) });
+        post.dataset.analyzed = 'true';
+    });
 
-    if (tweetsToAnalyze.length > 0) {
-        const batchAnalysis = await analyzeTweets(tweetsToAnalyze);
-        for (const result of batchAnalysis) {
-            await cacheAnalysis(result.tweetId, result.analysis);
-            applyPostVisibility(result.tweetId, result.analysis, topics);
+    const cachedAnalyses = await getCachedAnalyses(postIds);
+    const uncachedTweets = tweetsToAnalyze.filter((_, index) => !cachedAnalyses[index]);
+
+    cachedAnalyses.forEach((analysis, index) => {
+        if (analysis) {
+            hidePostIfMatchesTopics(postIds[index], analysis, topics);
         }
+    });
+
+    if (uncachedTweets.length > 0) {
+        const batchAnalysis = await analyzeTweets(uncachedTweets);
+        const analysesToCache = Object.fromEntries(
+            batchAnalysis.map(result => [result.tweetId, result.analysis])
+        );
+        await chrome.storage.local.set(analysesToCache);
+        batchAnalysis.forEach(result => {
+            hidePostIfMatchesTopics(result.tweetId, result.analysis, topics);
+        });
     }
 };
 
-
-// Function to apply post visibility based on analysis
-const applyPostVisibility = (postId, analysis, topics) => {
+const hidePostIfMatchesTopics = (postId, analysis, topics) => {
     if (!analysis || typeof analysis !== 'object') return;
     const matchingTopics = topics.filter(topic => analysis[topic]);
     if (matchingTopics.length === 0) return;
@@ -66,26 +72,37 @@ const applyPostVisibility = (postId, analysis, topics) => {
     if (!postElement || postElement.style.display === 'none') return;
 
     postElement.style.display = 'none';
-    console.log(`Post ${postId} hidden due to ${matchingTopics.join(', ')}\n${postElement.querySelector('[data-testid="tweetText"]')?.innerText.trim() ?? 'Text not found'}`);
+    const tweetText = postElement?.querySelector('[data-testid="tweetText"]')?.innerText?.trim() ?? '';
+    console.log(`Post ${postId} hidden due to ${matchingTopics.join(', ')}\n${truncateText(tweetText, 128)}`);
 };
 
 const analyzeTweets = async (tweets) => {
-    const { topics, GROQ_API_KEY } = await getStorageData();
-    if (!GROQ_API_KEY) return console.error('GROQ API key is missing. Please set it in the extension options.');
-    
     console.log(`Analyzing ${tweets.length} tweets`);
-
+    const { topics, GROQ_API_KEY } = await getSettings();
     const messages = [
         {
             role: "system",
-            content: "Your task is to classify a batch of Tweets. Respond with a JSON object containing a single key 'results' whose value is an array. For each tweet in this array, provide an object with 'tweetId' and 'analysis' properties. The 'analysis' should be an object with the given topics as keys and boolean values."
+            content: `Classify a batch of Tweets. Respond with a JSON object: 
+            {
+                "results": [
+                    {
+                        "tweetId": "...",
+                        "analysis": {
+                            "topic1": boolean,
+                            "topic2": boolean,
+                            ...
+                        }
+                    },
+                    ...
+                ]
+            }`
         },
         {
             role: "user",
-            content: `Analyze the following tweets for these topics: ${topics.join(', ')}\n${JSON.stringify(tweets, null, 2)}`
+            content: `Analyze tweets for topics: ${topics.join(', ')}\n${JSON.stringify(tweets)}`
         }
     ];
-
+    
     for (let retries = 0; retries < 3; retries++) {
         try {
             const response = await fetch(API_ENDPOINT, {
@@ -95,48 +112,42 @@ const analyzeTweets = async (tweets) => {
                     "Authorization": `Bearer ${GROQ_API_KEY}`
                 },
                 body: JSON.stringify({
-                    messages: messages,
+                    messages,
                     model: MODEL_NAME,
-                    temperature: 0.2,
+                    temperature: 0.1,
                     max_tokens: 4096,
                     top_p: 1,
                     stream: false,
                     response_format: { type: "json_object" },
-                    stop: null
                 })
             });
-            if (!response.ok) throw new Error(`HTTP error! status: ${response.status}`);
-            const responseData = await response.json();
-            const content = responseData.choices[0].message.content;
-            // console.log(`response: ${content}`);
-            return JSON.parse(content).results;
+            if (!response.ok) {
+                const errorBody = await response.text();
+                throw new Error(`HTTP error! status: ${response.status}, body: ${errorBody}`);
+            }
+            const { choices } = await response.json();
+            return JSON.parse(choices[0]?.message?.content).results;
         } catch (error) {
             console.error(`Error analyzing tweets (attempt ${retries + 1}/3):`, error);
             if (retries === 2) return [];
+            await delay(DELAY);
         }
     }
     return [];
 };
 
-// Debounce function to limit how often the scroll event fires
 const debounce = (func, delay) => {
     let timeoutId;
     return function (...args) {
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => func.apply(this, args), delay);
     };
-}
+};
 
-// Event listeners
-const debouncedCheck = (() => {
-    let timeoutId;
-    return () => {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(checkForNewPosts, 500);
-    };
-})();
+const debouncedCheck = debounce(checkForNewPosts, DELAY);
 
 if (window.location.hostname === 'x.com') {
-    window.addEventListener('scroll', debouncedCheck);
+    const observer = new MutationObserver(debouncedCheck);
+    observer.observe(document.body, { childList: true, subtree: true });
     checkForNewPosts();
 }
