@@ -1,17 +1,27 @@
 {
   "manifest_version": 3,
   "name": "X Content Filter",
-  "version": "1.1",
-  "description": "Filters out content on X.com based on configured topics",
+  "version": "1.2",
+  "description": "Filters out content on various social media platforms based on configured topics. Currently only supports X. Support for Threads, YouTube, and Reddit is coming.",
   "permissions": ["storage"],
-  "host_permissions": ["https://x.com/*", "https://api.groq.com/*"],
+  "host_permissions": [
+    "https://api.groq.com/*",
+    "https://x.com/*"
+  ],
   "action": {
-    "default_popup": "popup.html"
+    "default_popup": "src/popup/popup.html"
   },
   "content_scripts": [
     {
-      "matches": ["https://x.com/*"],
-      "js": ["content.js"]
+      "matches": [
+        "https://x.com/*"
+      ],
+      "js": [
+        "src/config/topics.js", 
+        "src/config/platforms.js", 
+        "src/utils/debounce.js", 
+        "src/content.js"
+      ]
     }
   ]
 }

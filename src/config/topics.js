@@ -1,0 +1,15 @@
+const TOPICS = [
+    "politics",
+    "negativity",
+    "controversy",
+    "ads",
+    "spam",
+    "violence",
+    "celebrity",
+    "crypto",
+    "clickbait",
+    "memes",
+    "NSFW",
+    "finance",
+    "sports",
+];
