@@ -6,9 +6,10 @@ const TOPICS = [
     "ads",
     "clickbait",
     "memes",
+    "celebrity",
     "politics",
     "finance",
+    "tech",
     "sports",
-    "celebrity",
     "crypto",
 ];
