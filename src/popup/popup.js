@@ -25,21 +25,13 @@ const validateGroqApiKey = async (apiKey) => {
     }
 };
 
-let notificationTimeout;
-
 const showNotification = (message, duration = 2000) => {
     const notificationElement = document.getElementById('notification');
-    const messageElement = document.getElementById('notification-message');
-    messageElement.textContent = message;
+    document.getElementById('notification-message').textContent = message;
     notificationElement.classList.remove('hidden');
     
-    if (notificationTimeout) {
-        clearTimeout(notificationTimeout);
-    }
-    
-    notificationTimeout = setTimeout(() => {
-        notificationElement.classList.add('hidden');
-    }, duration);
+    clearTimeout(notificationTimeout);
+    notificationTimeout = setTimeout(() => notificationElement.classList.add('hidden'), duration);
 };
 
 const renderTopicButtons = (selectedTopics) => {
@@ -62,13 +54,8 @@ const updateTopicButtonsState = (isApiKeyValid) => {
     const topicButtons = document.querySelectorAll('.topic-button');
     const topicsSection = document.getElementById('topics-section');
     
-    if (isApiKeyValid) {
-        topicButtons.forEach(button => button.disabled = false);
-        topicsSection.classList.remove('disabled');
-    } else {
-        topicButtons.forEach(button => button.disabled = true);
-        topicsSection.classList.add('disabled');
-    }
+    topicButtons.forEach(button => button.disabled = !isApiKeyValid);
+    topicsSection.classList.toggle('disabled', !isApiKeyValid);
 };
 
 const toggleTopic = async (button) => {
