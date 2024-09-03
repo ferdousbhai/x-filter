@@ -29,4 +29,6 @@ const platformConfigs = {
     // ... other platform configs ...
 };
 
-const getPlatformConfig = () => platformConfigs[window.location.hostname];
+const getPlatformConfig = () => {
+    return platformConfigs[window.location.hostname];
+}

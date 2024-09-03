@@ -3,28 +3,33 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Content Filter</title>
+    <title>X Guard</title>
     <link rel="stylesheet" href="popup.css">
 </head>
 <body>
     <main>
-        <h1>X Filter Settings</h1>
+        <h1>X Guard Settings</h1>
         
-        <div id="notification" class="notification hidden">
+        <div id="notification" class="notification hidden" aria-live="polite" role="alert">
             <span id="notification-message"></span>
         </div>
 
         <section id="api-key-section">
             <label for="api-key">
                 GROQ API Key
-                <span class="tooltip" title="Get GROQ API Key">ⓘ</span>
+                <span class="tooltip" title="Get GROQ API Key" role="button" tabindex="0">ⓘ</span>
             </label>
-            <input type="password" id="api-key" name="api-key" placeholder="Enter your GROQ API key" required>
+            <input type="password" id="api-key" name="api-key" placeholder="Enter your GROQ API key" required aria-required="true">
         </section>
         
         <section id="topics-section" class="disabled">
-            <h2>Select topics to exclude:</h2>
-            <div id="topics-container" class="topics-container"></div>
+            <h2>Manage topics to exclude:</h2>
+            <div id="topics-container" class="topics-container" role="group" aria-label="Selected topics"></div>
+            <div class="add-topic-container">
+                <input type="text" id="new-topic" placeholder="Add new topics" aria-label="New topic">
+                <button id="add-topic-btn" aria-label="Add topic">Add</button>
+            </div>
+            <button id="restore-default-btn" aria-label="Restore default topics">Restore Default Topics</button>
         </section>
     </main>
     
