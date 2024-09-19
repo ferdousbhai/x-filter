@@ -30,7 +30,8 @@ const findUnclassifiedPosts = async (config, forceReclassify = false) => {
 
 const processNewPosts = async (forceReclassify = false) => {
     try {
-        const { GROQ_API_KEY, selectedTopics } = await getStorageData(['GROQ_API_KEY', 'selectedTopics']);
+        const { GROQ_API_KEY, selectedTopics, extensionEnabled } = await getStorageData(['GROQ_API_KEY', 'selectedTopics', 'extensionEnabled']);
+        if (!extensionEnabled) return;
         if (!GROQ_API_KEY) throw new Error("Missing API key.");
 
         const { unclassifiedPosts, containers } = await findUnclassifiedPosts(config, forceReclassify);
@@ -74,22 +75,43 @@ const updatePostVisibility = async (selectedTopics) => {
 };
 
 const classifyPosts = async (posts, topics, apiKey) => new Promise((resolve, reject) => {
+    const timeout = setTimeout(() => {
+        reject(new Error('Classification request timed out'));
+    }, 30000); // 30 seconds timeout
+
     chrome.runtime.sendMessage({ action: 'classifyPosts', posts, topics, apiKey }, response => {
-        if (response.success) {
+        clearTimeout(timeout);
+
+        if (chrome.runtime.lastError) {
+            console.error('Runtime error:', chrome.runtime.lastError);
+            return reject(new Error(chrome.runtime.lastError.message));
+        }
+
+        if (!response) {
+            console.error('No response received from background script');
+            return reject(new Error('No response received from background script'));
+        }
+
+        if (response.success && response.classifications) {
             Object.entries(response.classifications).forEach(([postId, topics]) => {
-                console.log(`Post ${postId}: ${topics.length > 0 ? topics.join(', ') : 'didn\'t match any topics'}\n${posts.find(post => post.id === postId).text}`);
+                if (topics && Array.isArray(topics)) {
+                    console.log(`Post ${postId}: ${topics.length > 0 ? topics.join(', ') : 'didn\'t match any topics'}\n${posts.find(post => post.id === postId)?.text || 'Text not found'}`);
+                } else {
+                    console.warn(`Invalid topics for post ${postId}:`, topics);
+                }
             });
             resolve(response.classifications);
         } else {
-            console.error('Error classifying posts:', response.error);
-            reject(new Error(response.error));
+            console.error('Error classifying posts:', response.error || 'Unknown error', response);
+            reject(new Error(response.error || 'Unknown error in classification'));
         }
     });
 });
 
 chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     if (request.action === 'topicsUpdated') {
-        getStorageData(['selectedTopics']).then(({ selectedTopics = [] }) => {
+        getStorageData(['selectedTopics', 'extensionEnabled']).then(({ selectedTopics = [], extensionEnabled = true }) => {
+            if (!extensionEnabled) return;
             const newTopics = selectedTopics.filter(topic => !lastKnownTopics.includes(topic));
             if (newTopics.length > 0) {
                 chrome.storage.local.remove('classifications', () => {
@@ -103,6 +125,11 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
         });
     } else if (request.action === 'clearClassificationCache') {
         classificationCache = {};
+    } else if (request.action === 'extensionStateChanged') {
+        console.log('Process new posts:', request.enabled);
+        if (request.enabled) {
+            processNewPosts();
+        }
     }
 });
 

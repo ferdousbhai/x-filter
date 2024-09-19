@@ -4,12 +4,98 @@ const MAX_BATCH_SIZE = 30;
 
 const runtime = chrome.runtime || browser.runtime;
 
-runtime.onMessage.addListener((request, _, sendResponse) => {
+const ENABLED_ICON = {
+    16: "../icons/icon16.png",
+    48: "../icons/icon48.png",
+    128: "../icons/icon128.png"
+  };
+  
+  const DISABLED_ICON = {
+    16: "../icons/icon16_disabled.png",
+    48: "../icons/icon48_disabled.png",
+    128: "../icons/icon128_disabled.png"
+  };
+  
+  async function updateExtensionState(isEnabled) {
+    const iconPath = isEnabled ? ENABLED_ICON : DISABLED_ICON;
+  
+    try {
+      await chrome.action.setIcon({ path: iconPath });
+      await chrome.storage.local.set({ extensionEnabled: isEnabled });
+
+      await chrome.contextMenus.update("toggleExtension", {
+        title: isEnabled ? 'Disable Extension' : 'Enable Extension'
+      });
+  
+    } catch (error) {
+      console.error('Error updating extension state:', error);
+    }
+  }
+  
+  const initializeExtensionState = async () => {
+    const { extensionEnabled = true } = await chrome.storage.local.get("extensionEnabled");
+    await updateExtensionState(extensionEnabled);
+  };
+  
+  chrome.runtime.onInstalled.addListener(() => {
+      chrome.contextMenus.create({
+          id: "toggleExtension",
+          title: "Disable Extension",
+          contexts: ["action"]
+      });
+      initializeExtensionState();
+  });
+  
+chrome.contextMenus.onClicked.addListener((info) => {
+  if (info.menuItemId === "toggleExtension") {
+    toggleExtension();
+  }
+});
+
+async function toggleExtension() {
+  try {
+    const { extensionEnabled = true } = await chrome.storage.local.get("extensionEnabled");
+    const newState = !extensionEnabled;
+    
+    console.log("Current extension state:", extensionEnabled);
+    console.log("Toggling extension to:", newState);
+    
+    await updateExtensionState(newState);
+    console.log("Extension state updated successfully");
+    
+    // Notify content script about the state change
+    const tabs = await chrome.tabs.query({ active: true, currentWindow: true });
+    for (const tab of tabs) {
+      try {
+        await chrome.tabs.sendMessage(tab.id, { action: 'extensionStateChanged', enabled: newState });
+      } catch (error) {
+        console.warn(`Could not send message to tab ${tab.id}:`, error.message);
+        // If the error is due to the receiving end not existing, it's not critical
+        // so we'll just log a warning and continue
+      }
+    }
+  } catch (error) {
+    console.error("Error toggling extension state:", error);
+  }
+}
+
+runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === 'classifyPosts') {
-    classifyPosts(request.posts, request.topics, request.apiKey)
-      .then(classifications => sendResponse({ success: true, classifications }))
-      .catch(error => sendResponse({ success: false, error: error.message }));
-    return true;
+    chrome.storage.local.get("extensionEnabled", async ({ extensionEnabled = true }) => {
+      if (!extensionEnabled) {
+        sendResponse({ success: false, error: "Extension is disabled" });
+        return;
+      }
+      
+      try {
+        const classifications = await classifyPosts(request.posts, request.topics, request.apiKey);
+        sendResponse({ success: true, classifications: Object.fromEntries(classifications) });
+      } catch (error) {
+        console.error("Classification error:", error);
+        sendResponse({ success: false, error: error.message });
+      }
+    });
+    return true; // Indicates that the response is sent asynchronously
   }
 });
 
@@ -17,7 +103,10 @@ const truncateText = (text, maxLength = 280) =>
     text.length <= maxLength ? text : `${text.slice(0, maxLength - 3)}...`;
 
 const classifyPosts = async (posts, topics, apiKey) => {
-    if (topics.length === 0) {
+    if (!posts || posts.length === 0) {
+        throw new Error("No posts provided for classification");
+    }
+    if (!topics || topics.length === 0) {
         return new Map(posts.map(post => [post.id, []]));
     }
 
@@ -74,15 +163,18 @@ const classifyPosts = async (posts, topics, apiKey) => {
             if (!response.ok) {
                 const errorText = await response.text();
                 throw new Error(`HTTP error! status: ${response.status}, body: ${errorText}`);
-              }
+            }
             const { choices } = await response.json();
+            if (!choices || choices.length === 0 || !choices[0].message || !choices[0].message.content) {
+                throw new Error("Invalid response format from API");
+            }
             const parsedContent = JSON.parse(choices[0].message.content);
-            
             Object.entries(parsedContent).forEach(([postId, topics]) => {
-                classifications[postId] = Array.isArray(topics) ? topics : [];
+                classifications.set(postId, Array.isArray(topics) ? topics : []);
             });
         } catch (error) {
             console.error("Error classifying posts:", error);
+            throw error; // Propagate the error
         }
         if (i + MAX_BATCH_SIZE < posts.length) await new Promise(resolve => setTimeout(resolve, 500)); // 0.5s
     }

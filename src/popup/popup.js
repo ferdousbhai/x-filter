@@ -3,12 +3,22 @@ const MAX_SELECTED_TOPICS = 20;
 const storage = chrome.storage.local;
 
 const loadSettings = async () => {
-    const { GROQ_API_KEY, selectedTopics = DEFAULT_SELECTED_TOPICS } = await storage.get(['GROQ_API_KEY', 'selectedTopics']);
-    if (!selectedTopics.length) await storage.set({ selectedTopics: DEFAULT_SELECTED_TOPICS });
-    renderTopicButtons(selectedTopics);
-    const topicsSection = document.getElementById('topics-section');
-    topicsSection.classList.toggle('disabled', !GROQ_API_KEY);
+    const { GROQ_API_KEY, selectedTopics } = await storage.get(['GROQ_API_KEY', 'selectedTopics']);
+    
+    const currentTopics = selectedTopics === undefined ? DEFAULT_SELECTED_TOPICS : (selectedTopics || []);
+
+    if (selectedTopics === undefined) {
+        await storage.set({ selectedTopics: DEFAULT_SELECTED_TOPICS });
+    }
+
+    renderTopicButtons(currentTopics);
+    
+    document.getElementById('topics-section').classList.toggle('disabled', !GROQ_API_KEY);
     document.getElementById('api-key').value = GROQ_API_KEY || '';
+
+    chrome.tabs.query({active: true, currentWindow: true}, ([tab]) => {
+        tab && chrome.tabs.sendMessage(tab.id, {action: "topicsUpdated", selectedTopics: currentTopics});
+    });
 };
 
 const saveApiKey = async () => {
@@ -38,20 +48,32 @@ const showNotification = (message, duration = 2000) => {
 };
 
 const renderTopicButtons = (selectedTopics) => {
-    document.getElementById('topics-container').innerHTML = selectedTopics.map(topic => 
-        `<button class="topic-button" data-topic="${topic}">${topic}</button>`
-    ).join('');
+    const container = document.getElementById('topics-container');
+    // Remove all existing child elements
+    while (container.firstChild) {
+        container.removeChild(container.firstChild);
+    }
+    // Create and append new buttons
+    selectedTopics.forEach(topic => {
+        const button = document.createElement('button');
+        button.className = 'topic-button';
+        button.dataset.topic = topic;
+        button.textContent = topic;
+        container.appendChild(button);
+    });
 };
 
 const updateSelectedTopics = async (newSelectedTopics) => {
-    const { selectedTopics: oldSelectedTopics } = await storage.get(['selectedTopics']);
+    const { selectedTopics: oldTopics } = await storage.get(['selectedTopics']);
     await storage.set({ selectedTopics: newSelectedTopics });
     renderTopicButtons(newSelectedTopics);
-    if (JSON.stringify(oldSelectedTopics) !== JSON.stringify(newSelectedTopics)) {
+    
+    if (JSON.stringify(oldTopics) !== JSON.stringify(newSelectedTopics)) {
         await clearClassifications();
     }
+    
     chrome.tabs.query({active: true, currentWindow: true}, ([tab]) => {
-        tab && chrome.tabs.sendMessage(tab.id, {action: "topicsUpdated"});
+        tab && chrome.tabs.sendMessage(tab.id, {action: "topicsUpdated", selectedTopics: newSelectedTopics});
     });
 };
 
@@ -67,7 +89,7 @@ const addTopic = async () => {
         await updateSelectedTopics([...selectedTopics, ...topicsToAdd]);
         document.getElementById('new-topic').value = '';
         await clearClassifications();
-        showNotification(`Added ${topicsToAdd.length} new topic(s)!${topicsToAdd.length < newTopics.length ? ` Some couldn't be added due to the 20-topic limit.` : ''}`, 3000);
+        showNotification(`Added ${topicsToAdd.length} new topic(s)!${topicsToAdd.length < newTopics.length ? ' Some couldn\'t be added due to the 20-topic limit.' : ''}`, 3000);
     } else {
         showNotification(selectedTopics.length >= MAX_SELECTED_TOPICS ? 'Topic limit reached!' : 'No new topics added.', 2000);
     }
